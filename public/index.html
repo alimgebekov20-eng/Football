@@ -180,6 +180,23 @@
             font-size: 0.75rem;
             color: #f0e68c;
         }
+        .save-badge {
+            font-size: 0.6rem;
+            color: #66aa88;
+            text-align: right;
+            margin-top: 4px;
+            opacity: 0.6;
+        }
+        #playerStats {
+            background: rgba(0,0,0,0.2);
+            border-radius: 16px;
+            padding: 8px 12px;
+            margin: 8px 0;
+            font-size: 0.7rem;
+            color: #99bbcc;
+            text-align: center;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -201,6 +218,9 @@
     </div>
 
     <div id="status">⏳ Войди в игру</div>
+
+    <!-- СТАТИСТИКА -->
+    <div id="playerStats">📊 0 матчей | 🏆 0 побед | 🤝 0 ничьих | 😞 0 поражений | ⚽ 0 голов</div>
 
     <!-- ОЖИДАНИЕ -->
     <div id="waitingArea" class="match-box hidden">
@@ -228,6 +248,7 @@
         </div>
         <div id="eventsLog" class="events"></div>
         <button class="btn btn-danger btn-block mt-8" id="endMatchBtn">🏁 Завершить матч</button>
+        <div class="save-badge" id="saveStatus">💾 Сохранено</div>
     </div>
 
     <!-- РЕЗУЛЬТАТ -->
@@ -252,7 +273,10 @@
     let playerName = '';
     let roomId = null;
     let matchActive = false;
+    let saveTimer = null;
+    let currentProfile = null;
 
+    // ===== ЭЛЕМЕНТЫ =====
     const starsEl = document.getElementById('stars');
     const crystalsEl = document.getElementById('crystals');
     const ratingEl = document.getElementById('rating');
@@ -270,21 +294,139 @@
     const player2Name = document.getElementById('player2Name');
     const rating1 = document.getElementById('rating1');
     const rating2 = document.getElementById('rating2');
+    const saveStatus = document.getElementById('saveStatus');
 
-    function vibrate(ms = 20) {
-        if (navigator.vibrate) navigator.vibrate(ms);
+    // ===== СОХРАНЕНИЕ В localStorage =====
+
+    function loadPlayerData() {
+        try {
+            const data = localStorage.getItem('football_player');
+            return data ? JSON.parse(data) : null;
+        } catch (e) {
+            console.warn('Ошибка загрузки данных:', e);
+            return null;
+        }
     }
 
-    document.getElementById('joinBtn').onclick = () => {
-        playerName = document.getElementById('nameInput').value.trim() || 'Игрок';
-        socket.emit('join', playerName);
-        vibrate(15);
-    };
+    function savePlayerData(data) {
+        try {
+            localStorage.setItem('football_player', JSON.stringify(data));
+            showSaveStatus('💾 Сохранено');
+            return true;
+        } catch (e) {
+            console.warn('Ошибка сохранения:', e);
+            showSaveStatus('❌ Ошибка сохранения');
+            return false;
+        }
+    }
+
+    function loadPlayerStats() {
+        const data = loadPlayerData();
+        return data?.stats || { matches: 0, wins: 0, draws: 0, losses: 0, goals: 0, totalStars: 0 };
+    }
+
+    function updateStatsDisplay() {
+        const stats = loadPlayerStats();
+        const el = document.getElementById('playerStats');
+        el.style.display = 'block';
+        el.textContent = `📊 ${stats.matches} матчей | 🏆 ${stats.wins} побед | 🤝 ${stats.draws} ничьих | 😞 ${stats.losses} поражений | ⚽ ${stats.goals} голов`;
+    }
+
+    function showSaveStatus(msg) {
+        if (saveStatus) {
+            saveStatus.textContent = msg;
+            saveStatus.style.opacity = '1';
+            clearTimeout(saveStatus._timeout);
+            saveStatus._timeout = setTimeout(() => {
+                saveStatus.style.opacity = '0.4';
+            }, 2000);
+        }
+    }
+
+    // ===== МГНОВЕННОЕ СОХРАНЕНИЕ =====
+
+    function saveCurrentProfile() {
+        if (!currentProfile) return;
+        
+        const data = loadPlayerData() || {};
+        data.name = currentProfile.name || playerName || 'Игрок';
+        data.stars = parseInt(starsEl.textContent) || 0;
+        data.crystals = parseInt(crystalsEl.textContent) || 0;
+        data.teamRating = parseInt(ratingEl.textContent) || 50;
+        
+        // Сохраняем статистику
+        const stats = loadPlayerStats();
+        data.stats = stats;
+        
+        savePlayerData(data);
+    }
+
+    // Сохраняем при любом изменении
+    function triggerSave() {
+        saveCurrentProfile();
+    }
+
+    // ===== АВТОСОХРАНЕНИЕ КАЖДЫЕ 5 СЕКУНД =====
+
+    function startAutoSave() {
+        if (saveTimer) clearInterval(saveTimer);
+        saveTimer = setInterval(() => {
+            saveCurrentProfile();
+            showSaveStatus('💾 Автосохранение');
+        }, 5000);
+    }
+
+    function stopAutoSave() {
+        if (saveTimer) {
+            clearInterval(saveTimer);
+            saveTimer = null;
+        }
+    }
+
+    // ===== СОХРАНЕНИЕ ПРИ ЗАКРЫТИИ =====
+
+    function saveBeforeUnload() {
+        saveCurrentProfile();
+    }
+
+    window.addEventListener('beforeunload', saveBeforeUnload);
+    window.addEventListener('pagehide', saveBeforeUnload);
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            saveCurrentProfile();
+        }
+    });
+
+    // ===== ИНИЦИАЛИЗАЦИЯ =====
+
+    function loadSavedProfile() {
+        const saved = loadPlayerData();
+        if (saved) {
+            document.getElementById('nameInput').value = saved.name || 'Игрок';
+            currentProfile = saved;
+            updateStatsDisplay();
+            
+            // Отправляем на сервер
+            socket.emit('loadProfile', {
+                name: saved.name || 'Игрок',
+                stars: saved.stars || 100,
+                crystals: saved.crystals || 15,
+                teamRating: saved.teamRating || 50
+            });
+            return true;
+        }
+        return false;
+    }
+
+    // ===== СОКЕТЫ =====
 
     socket.on('updateProfile', (data) => {
         starsEl.textContent = data.stars;
         crystalsEl.textContent = data.crystals;
         ratingEl.textContent = data.teamRating;
+        currentProfile = data;
+        triggerSave();
+        updateStatsDisplay();
     });
 
     socket.on('waiting', (msg) => {
@@ -292,6 +434,7 @@
         waitingArea.classList.remove('hidden');
         matchArea.classList.add('hidden');
         resultArea.classList.add('hidden');
+        startAutoSave();
     });
 
     socket.on('queueUpdate', (count) => {
@@ -313,16 +456,19 @@
         matchArea.classList.remove('hidden');
         resultArea.classList.add('hidden');
         matchActive = true;
+        startAutoSave();
         vibrate(50);
     });
 
     socket.on('matchTime', (data) => {
         matchTime.textContent = data.time + "'";
+        triggerSave(); // Сохраняем каждую минуту
     });
 
     socket.on('scoreUpdate', (data) => {
         score1.textContent = data.score1;
         score2.textContent = data.score2;
+        triggerSave(); // Мгновенное сохранение при голе
         vibrate(20);
     });
 
@@ -335,6 +481,7 @@
         else if (event.type === 'offside') div.style.color = '#88ccff';
         eventsLog.appendChild(div);
         eventsLog.scrollTop = eventsLog.scrollHeight;
+        triggerSave(); // Сохраняем при любом событии
         vibrate(30);
     });
 
@@ -351,24 +498,27 @@
         document.getElementById('resultTitle').textContent = title;
         document.getElementById('resultScore').textContent = `${data.score1} : ${data.score2}`;
         
+        // Сохраняем статистику
+        const stats = loadPlayerStats();
+        stats.matches++;
+        if (isWinner === true) stats.wins++;
+        else if (isWinner === null) stats.draws++;
+        else stats.losses++;
+        stats.goals += parseInt(score1.textContent) || 0;
+        
+        const current = loadPlayerData() || {};
+        current.stats = stats;
+        savePlayerData(current);
+        updateStatsDisplay();
+        
         let details = '';
         if (data.stars1 > 0) details += `⭐ +${data.stars1} звёзд `;
         if (data.crystals1 > 0) details += `💎 +${data.crystals1} кристаллов`;
-        if (data.stars2 > 0 && data.stars2 < 5) details += ` (соперник +${data.stars2})`;
         document.getElementById('resultDetails').textContent = details || 'Хорошая игра!';
         
         statusEl.textContent = '🏁 Матч завершён';
+        triggerSave();
         vibrate(100);
-        
-        // Показываем все события
-        if (data.events) {
-            eventsLog.innerHTML = '';
-            data.events.forEach(e => {
-                const div = document.createElement('div');
-                div.textContent = `${e.time}' ${e.text}`;
-                eventsLog.appendChild(div);
-            });
-        }
     });
 
     socket.on('updateLeaders', (leaders) => {
@@ -391,6 +541,7 @@
 
     socket.on('packResult', (msg) => {
         statusEl.textContent = '📦 ' + msg;
+        triggerSave();
         vibrate(40);
     });
 
@@ -398,11 +549,25 @@
         statusEl.textContent = '❌ ' + msg;
         matchArea.classList.add('hidden');
         matchActive = false;
+        triggerSave();
     });
+
+    // ===== КНОПКИ =====
+
+    document.getElementById('joinBtn').onclick = () => {
+        playerName = document.getElementById('nameInput').value.trim() || 'Игрок';
+        socket.emit('join', playerName);
+        vibrate(15);
+        // Сохраняем ник
+        const data = loadPlayerData() || {};
+        data.name = playerName;
+        savePlayerData(data);
+    };
 
     document.getElementById('endMatchBtn').onclick = () => {
         if (roomId && matchActive) {
             socket.emit('endMatch', roomId);
+            triggerSave();
         }
     };
 
@@ -416,9 +581,36 @@
         vibrate(20);
     };
 
+    // ===== ВИБРАЦИЯ =====
+
+    function vibrate(ms = 20) {
+        if (navigator.vibrate) navigator.vibrate(ms);
+    }
+
+    // ===== ЗАПУСК =====
+
     window.onload = () => {
-        setTimeout(() => document.getElementById('joinBtn').click(), 300);
+        // Загружаем сохранённый ник
+        const saved = loadPlayerData();
+        if (saved?.name) {
+            document.getElementById('nameInput').value = saved.name;
+            playerName = saved.name;
+        }
+        
+        // Загружаем статистику
+        updateStatsDisplay();
+        
+        // Загружаем профиль на сервер
+        loadSavedProfile();
+        
+        // Автовход
+        setTimeout(() => {
+            document.getElementById('joinBtn').click();
+        }, 500);
+        
+        // Запускаем автосохранение
+        startAutoSave();
     };
 </script>
 </body>
-    </html>
+</html>

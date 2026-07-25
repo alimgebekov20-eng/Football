@@ -34,7 +34,6 @@
             border-radius: 32px;
             padding: 16px 14px 20px;
             border: 1px solid rgba(255,255,255,0.08);
-            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
         }
         .header {
             display: flex;
@@ -48,7 +47,7 @@
             display: flex;
             gap: 10px;
             font-weight: 700;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
         }
         .currency span {
             background: rgba(0,0,0,0.3);
@@ -73,30 +72,12 @@
             transition: 0.08s ease;
             touch-action: manipulation;
             min-height: 48px;
-            min-width: 48px;
             border: 1px solid rgba(255,255,255,0.05);
         }
-        .btn:active {
-            transform: translateY(4px);
-            box-shadow: 0 0px 0 #1a2f38;
-        }
-        .btn-primary {
-            background: #e6b42c;
-            color: #1f2e3a;
-            box-shadow: 0 4px 0 #8f6e1a;
-        }
-        .btn-danger {
-            background: #c73d3d;
-            box-shadow: 0 4px 0 #741f1f;
-        }
-        .btn-success {
-            background: #2e9e5a;
-            box-shadow: 0 4px 0 #1a5f35;
-        }
-        .btn-block {
-            width: 100%;
-            justify-content: center;
-        }
+        .btn:active { transform: translateY(4px); box-shadow: 0 0px 0 #1a2f38; }
+        .btn-primary { background: #e6b42c; color: #1f2e3a; box-shadow: 0 4px 0 #8f6e1a; }
+        .btn-danger { background: #c73d3d; box-shadow: 0 4px 0 #741f1f; }
+        .btn-success { background: #2e9e5a; box-shadow: 0 4px 0 #1a5f35; }
         .match-box {
             background: rgba(0,0,0,0.35);
             border-radius: 28px;
@@ -106,25 +87,20 @@
             border: 1px solid rgba(255,255,255,0.05);
         }
         .score {
-            font-size: 3.2rem;
+            font-size: 2.8rem;
             font-weight: 800;
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 16px;
+            gap: 12px;
             text-shadow: 0 4px 0 rgba(0,0,0,0.3);
         }
-        .score span {
-            min-width: 50px;
-        }
-        .vs {
-            font-size: 1.2rem;
-            color: #88aabb;
-        }
+        .score span { min-width: 40px; }
+        .vs { font-size: 1rem; color: #88aabb; }
         .events {
             margin-top: 10px;
-            font-size: 0.85rem;
-            max-height: 90px;
+            font-size: 0.8rem;
+            max-height: 120px;
             overflow-y: auto;
             background: rgba(0,0,0,0.25);
             border-radius: 16px;
@@ -135,35 +111,25 @@
         .events div {
             padding: 3px 0;
             border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-weight: 500;
         }
+        .events .goal { color: #ffdd44; }
+        .events .red { color: #ff4444; }
+        .events .yellow { color: #ffcc00; }
+        .events .offside { color: #88ccff; }
         .leaders {
             background: rgba(0,0,0,0.25);
             border-radius: 20px;
             padding: 12px 14px;
             margin-top: 12px;
         }
-        .leaders h4 {
-            font-size: 0.9rem;
-            color: #bbd4e0;
-            margin-bottom: 6px;
-        }
+        .leaders h4 { font-size: 0.9rem; color: #bbd4e0; margin-bottom: 6px; }
         .leader-item {
             display: flex;
             justify-content: space-between;
             padding: 4px 0;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             border-bottom: 1px solid rgba(255,255,255,0.04);
-        }
-        .actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 8px;
-            margin-top: 12px;
-        }
-        .actions .btn {
-            font-size: 0.85rem;
-            padding: 10px 6px;
-            min-height: 52px;
         }
         .flex {
             display: flex;
@@ -171,9 +137,7 @@
             align-items: center;
             flex-wrap: wrap;
         }
-        .flex-center {
-            justify-content: center;
-        }
+        .flex-center { justify-content: center; }
         input {
             padding: 12px 16px;
             border-radius: 60px;
@@ -194,14 +158,28 @@
             min-height: 28px;
             font-weight: 500;
         }
-        .opponent-name {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: #f0e68c;
-        }
+        .opponent-name { font-size: 1.1rem; font-weight: 600; color: #f0e68c; }
         .hidden { display: none !important; }
         .mt-8 { margin-top: 8px; }
-        .mb-8 { margin-bottom: 8px; }
+        .match-title {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: #99bbcc;
+            padding: 0 4px 8px 4px;
+        }
+        .time-display {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #66ddff;
+        }
+        .rating-badge {
+            background: rgba(255,215,0,0.15);
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: #f0e68c;
+        }
     </style>
 </head>
 <body>
@@ -213,7 +191,7 @@
             <span><span class="crystal">💎</span> <span id="crystals">0</span></span>
             <span>📊 <span id="rating">50</span></span>
         </div>
-        <button class="btn btn-primary" id="openPackBtn" style="font-size:0.8rem; padding:8px 14px;">📦 Пак</button>
+        <button class="btn btn-primary" id="openPackBtn" style="font-size:0.8rem; padding:8px 14px;">📦 Пак (3💎)</button>
     </div>
 
     <!-- ВХОД -->
@@ -233,19 +211,31 @@
 
     <!-- МАТЧ -->
     <div id="matchArea" class="match-box hidden">
-        <div>⚔️ <span class="opponent-name" id="opponentName">Соперник</span></div>
+        <div class="match-title">
+            <span id="player1Name" style="font-weight:600;">Игрок1</span>
+            <span class="time-display" id="matchTime">0'</span>
+            <span id="player2Name" style="font-weight:600;">Игрок2</span>
+        </div>
+        <div class="match-title" style="font-size:0.7rem; padding-top:0; color:#8899aa;">
+            <span class="rating-badge" id="rating1">📊 50</span>
+            <span></span>
+            <span class="rating-badge" id="rating2">📊 50</span>
+        </div>
         <div class="score">
             <span id="score1">0</span>
             <span class="vs">vs</span>
             <span id="score2">0</span>
         </div>
         <div id="eventsLog" class="events"></div>
-        <div class="actions">
-            <button class="btn btn-primary" id="actionGoal">⚽ Удар</button>
-            <button class="btn" id="actionFoul" style="background:#b8860b; box-shadow:0 4px 0 #6d5000;">🟨 Фол</button>
-            <button class="btn" id="actionOffside" style="background:#4a6a7a; box-shadow:0 4px 0 #2a3a4a;">🚩 Оффсайд</button>
-        </div>
         <button class="btn btn-danger btn-block mt-8" id="endMatchBtn">🏁 Завершить матч</button>
+    </div>
+
+    <!-- РЕЗУЛЬТАТ -->
+    <div id="resultArea" class="match-box hidden">
+        <div style="font-size:1.5rem; font-weight:700;" id="resultTitle">🏆</div>
+        <div style="font-size:2rem; font-weight:800; margin:4px 0;" id="resultScore">0:0</div>
+        <div style="font-size:0.9rem; color:#aaccee;" id="resultDetails"></div>
+        <button class="btn btn-primary" id="continueBtn" style="margin-top:10px;">🔁 Продолжить</button>
     </div>
 
     <!-- ЛИДЕРЫ -->
@@ -255,55 +245,53 @@
             <div class="leader-item" style="color:#8899aa;">Загрузка...</div>
         </div>
     </div>
-
-    <div style="text-align:center; font-size:0.65rem; color:#445566; margin-top:12px;">
-        ⚡ Сделано с ❤️ • Играй с друзьями!
-    </div>
 </div>
 
 <script>
     const socket = io();
     let playerName = '';
     let roomId = null;
+    let matchActive = false;
 
-    // Элементы
     const starsEl = document.getElementById('stars');
     const crystalsEl = document.getElementById('crystals');
     const ratingEl = document.getElementById('rating');
     const statusEl = document.getElementById('status');
     const matchArea = document.getElementById('matchArea');
     const waitingArea = document.getElementById('waitingArea');
-    const opponentName = document.getElementById('opponentName');
+    const resultArea = document.getElementById('resultArea');
     const score1 = document.getElementById('score1');
     const score2 = document.getElementById('score2');
     const eventsLog = document.getElementById('eventsLog');
     const leadersList = document.getElementById('leadersList');
     const queueCount = document.getElementById('queueCount');
+    const matchTime = document.getElementById('matchTime');
+    const player1Name = document.getElementById('player1Name');
+    const player2Name = document.getElementById('player2Name');
+    const rating1 = document.getElementById('rating1');
+    const rating2 = document.getElementById('rating2');
 
-    // ВИБРАЦИЯ (если поддерживается)
     function vibrate(ms = 20) {
         if (navigator.vibrate) navigator.vibrate(ms);
     }
 
-    // ВХОД
     document.getElementById('joinBtn').onclick = () => {
         playerName = document.getElementById('nameInput').value.trim() || 'Игрок';
         socket.emit('join', playerName);
         vibrate(15);
     };
 
-    // СОБЫТИЯ СОКЕТА
     socket.on('updateProfile', (data) => {
         starsEl.textContent = data.stars;
         crystalsEl.textContent = data.crystals;
         ratingEl.textContent = data.teamRating;
-        vibrate(10);
     });
 
     socket.on('waiting', (msg) => {
         statusEl.textContent = '⏳ ' + msg;
         waitingArea.classList.remove('hidden');
         matchArea.classList.add('hidden');
+        resultArea.classList.add('hidden');
     });
 
     socket.on('queueUpdate', (count) => {
@@ -312,14 +300,24 @@
 
     socket.on('matchStart', (data) => {
         roomId = data.roomId;
-        opponentName.textContent = data.opponent;
+        player1Name.textContent = data.player1;
+        player2Name.textContent = data.player2;
+        rating1.textContent = '📊 ' + data.rating1;
+        rating2.textContent = '📊 ' + data.rating2;
         score1.textContent = '0';
         score2.textContent = '0';
         eventsLog.innerHTML = '';
+        matchTime.textContent = "0'";
         statusEl.textContent = '🔴 МАТЧ ИДЁТ!';
         waitingArea.classList.add('hidden');
         matchArea.classList.remove('hidden');
+        resultArea.classList.add('hidden');
+        matchActive = true;
         vibrate(50);
+    });
+
+    socket.on('matchTime', (data) => {
+        matchTime.textContent = data.time + "'";
     });
 
     socket.on('scoreUpdate', (data) => {
@@ -330,26 +328,47 @@
 
     socket.on('matchEvent', (event) => {
         const div = document.createElement('div');
-        div.textContent = `⏱️ ${event.time}' ${event.text}`;
+        div.textContent = `${event.time}' ${event.text}`;
+        if (event.type === 'goal') div.style.color = '#ffdd44';
+        else if (event.type === 'red') div.style.color = '#ff4444';
+        else if (event.type === 'yellow') div.style.color = '#ffcc00';
+        else if (event.type === 'offside') div.style.color = '#88ccff';
         eventsLog.appendChild(div);
         eventsLog.scrollTop = eventsLog.scrollHeight;
         vibrate(30);
     });
 
-    socket.on('opponentAction', (data) => {
-        statusEl.textContent = `👀 Соперник: ${data.action}`;
-    });
-
     socket.on('matchResult', (data) => {
-        let msg = '🤝 Ничья!';
-        if (data.result === 'p1') msg = '🎉 ТЫ ПОБЕДИЛ! +⭐ +💎';
-        else if (data.result === 'p2') msg = '😞 Ты проиграл... -⭐';
-        statusEl.textContent = `${msg} (${data.score1}:${data.score2})`;
+        matchActive = false;
         matchArea.classList.add('hidden');
+        resultArea.classList.remove('hidden');
+        
+        const isWinner = data.result === 'p1' ? true : (data.result === 'p2' ? false : null);
+        let title = '🤝 Ничья!';
+        if (isWinner === true) title = '🎉 ПОБЕДА!';
+        else if (isWinner === false) title = '😞 Поражение...';
+        
+        document.getElementById('resultTitle').textContent = title;
+        document.getElementById('resultScore').textContent = `${data.score1} : ${data.score2}`;
+        
+        let details = '';
+        if (data.stars1 > 0) details += `⭐ +${data.stars1} звёзд `;
+        if (data.crystals1 > 0) details += `💎 +${data.crystals1} кристаллов`;
+        if (data.stars2 > 0 && data.stars2 < 5) details += ` (соперник +${data.stars2})`;
+        document.getElementById('resultDetails').textContent = details || 'Хорошая игра!';
+        
+        statusEl.textContent = '🏁 Матч завершён';
         vibrate(100);
-        setTimeout(() => {
-            socket.emit('join', playerName);
-        }, 2500);
+        
+        // Показываем все события
+        if (data.events) {
+            eventsLog.innerHTML = '';
+            data.events.forEach(e => {
+                const div = document.createElement('div');
+                div.textContent = `${e.time}' ${e.text}`;
+                eventsLog.appendChild(div);
+            });
+        }
     });
 
     socket.on('updateLeaders', (leaders) => {
@@ -375,25 +394,21 @@
         vibrate(40);
     });
 
-    // ДЕЙСТВИЯ В МАТЧЕ
-    document.getElementById('actionGoal').onclick = () => {
-        if (roomId) { socket.emit('action', { roomId, action: 'goal' }); vibrate(15); }
-    };
-    document.getElementById('actionFoul').onclick = () => {
-        if (roomId) { socket.emit('action', { roomId, action: 'foul' }); vibrate(15); }
-    };
-    document.getElementById('actionOffside').onclick = () => {
-        if (roomId) { socket.emit('action', { roomId, action: 'offside' }); vibrate(15); }
-    };
+    socket.on('matchEnd', (msg) => {
+        statusEl.textContent = '❌ ' + msg;
+        matchArea.classList.add('hidden');
+        matchActive = false;
+    });
 
     document.getElementById('endMatchBtn').onclick = () => {
-        if (roomId) {
+        if (roomId && matchActive) {
             socket.emit('endMatch', roomId);
-            roomId = null;
-            matchArea.classList.add('hidden');
-            statusEl.textContent = '⏳ Матч завершён';
-            vibrate(30);
         }
+    };
+
+    document.getElementById('continueBtn').onclick = () => {
+        resultArea.classList.add('hidden');
+        socket.emit('join', playerName);
     };
 
     document.getElementById('openPackBtn').onclick = () => {
@@ -401,37 +416,9 @@
         vibrate(20);
     };
 
-    // АВТОВХОД
     window.onload = () => {
         setTimeout(() => document.getElementById('joinBtn').click(), 300);
     };
-
-    // СВАЙП-ЖЕСТЫ (для быстрых действий)
-    let startX = 0, startY = 0;
-    document.addEventListener('touchstart', (e) => {
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-    });
-    document.addEventListener('touchend', (e) => {
-        if (!startX || !startY) return;
-        const endX = e.changedTouches[0].clientX;
-        const endY = e.changedTouches[0].clientY;
-        const dx = endX - startX;
-        const dy = endY - startY;
-        if (Math.abs(dx) < 30 && Math.abs(dy) < 30) return;
-        if (Math.abs(dx) > Math.abs(dy)) {
-            if (dx > 50) { // свайп вправо — удар
-                document.getElementById('actionGoal').click();
-            } else if (dx < -50) { // влево — фол
-                document.getElementById('actionFoul').click();
-            }
-        } else {
-            if (dy > 50) { // вниз — оффсайд
-                document.getElementById('actionOffside').click();
-            }
-        }
-        startX = 0; startY = 0;
-    });
 </script>
 </body>
-          </html>
+    </html>

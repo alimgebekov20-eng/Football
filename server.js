@@ -14,12 +14,27 @@ const matches = {};
 
 // 90 игровых минут = 20 секунд
 const MATCH_DURATION = 90;
-const REAL_MINUTE_MS = 222; // 20000ms / 90 ≈ 222ms
+const REAL_MINUTE_MS = 222;
 
 io.on('connection', (socket) => {
     console.log('✅ Игрок подключился:', socket.id);
     io.emit('queueUpdate', waitingQueue.length);
 
+    // Загрузка сохранённого профиля
+    socket.on('loadProfile', (data) => {
+        players[socket.id] = {
+            name: data.name || 'Аноним',
+            stars: data.stars || 100,
+            crystals: data.crystals || 15,
+            teamRating: data.teamRating || 50,
+            redCards: 0,
+            yellowCards: 0
+        };
+        socket.emit('updateProfile', players[socket.id]);
+        io.emit('updateLeaders', getLeaders());
+    });
+
+    // Вход в игру
     socket.on('join', (name) => {
         if (players[socket.id]) {
             players[socket.id].name = name || 'Аноним';
@@ -36,12 +51,29 @@ io.on('connection', (socket) => {
         
         io.emit('updateLeaders', getLeaders());
         socket.emit('updateProfile', players[socket.id]);
-        
-        if (!waitingQueue.includes(socket.id) && !isPlayerInMatch(socket.id)) {
-            waitingQueue.push(socket.id);
-            io.emit('queueUpdate', waitingQueue.length);
+        socket.emit('waiting', 'Нажми "Найти соперника"');
+    });
+
+    // Поиск соперника по кнопке
+    socket.on('findMatch', () => {
+        if (!players[socket.id]) {
+            socket.emit('error', 'Сначала войди в игру');
+            return;
         }
-        socket.emit('waiting', 'Ожидание соперника...');
+        
+        if (isPlayerInMatch(socket.id)) {
+            socket.emit('error', 'Ты уже в матче');
+            return;
+        }
+        
+        if (waitingQueue.includes(socket.id)) {
+            socket.emit('waiting', 'Уже в очереди...');
+            return;
+        }
+        
+        waitingQueue.push(socket.id);
+        io.emit('queueUpdate', waitingQueue.length);
+        socket.emit('waiting', 'Поиск соперника...');
         matchmake(socket);
     });
 
@@ -62,10 +94,7 @@ io.on('connection', (socket) => {
                     opponentSocket.emit('matchEnd', 'Соперник отключился');
                     setTimeout(() => {
                         if (players[opponentId]) {
-                            waitingQueue.push(opponentId);
-                            io.emit('queueUpdate', waitingQueue.length);
-                            opponentSocket.emit('waiting', 'Ищем нового соперника...');
-                            matchmake(opponentSocket);
+                            opponentSocket.emit('waiting', 'Нажми "Найти соперника"');
                         }
                     }, 2000);
                 }
@@ -92,8 +121,6 @@ io.on('connection', (socket) => {
         }
         
         player.crystals -= 3;
-        
-        // Рандомный буст с разным весом
         const boost = getRandomBoost();
         const oldRating = player.teamRating;
         player.teamRating = Math.min(100, player.teamRating + boost);
@@ -102,7 +129,6 @@ io.on('connection', (socket) => {
         socket.emit('packResult', `📦 +${boost} к рейтингу! (${oldRating} → ${player.teamRating})`);
         io.emit('updateLeaders', getLeaders());
         
-        // Бонус редко
         if (Math.random() < 0.1) {
             const bonus = Math.floor(Math.random() * 3) + 1;
             player.stars += bonus;
@@ -120,7 +146,6 @@ io.on('connection', (socket) => {
 
 function getRandomBoost() {
     const rand = Math.random();
-    // +1: 40%, +2: 30%, +3: 15%, +4: 10%, +5: 5%
     if (rand < 0.40) return 1;
     if (rand < 0.70) return 2;
     if (rand < 0.85) return 3;
@@ -160,7 +185,8 @@ function matchmake(socket) {
         redCards2: 0,
         yellowCards1: 0,
         yellowCards2: 0,
-        timer: null
+        timer: null,
+        finished: false
     };
     
     socket.join(roomId);
@@ -177,12 +203,11 @@ function matchmake(socket) {
             rating2: p2.teamRating
         });
         
-        // Запускаем таймер матча
         startMatchTimer(roomId);
     } else {
         delete matches[roomId];
         waitingQueue.push(socket.id);
-        socket.emit('waiting', 'Соперник отключился, ищем нового...');
+        socket.emit('waiting', 'Соперник отключился');
         io.emit('queueUpdate', waitingQueue.length);
     }
 }
@@ -193,16 +218,12 @@ function startMatchTimer(roomId) {
     
     match.timer = setInterval(() => {
         match.time++;
-        
-        // Обновляем время
         io.to(roomId).emit('matchTime', { time: match.time });
         
-        // Каждую минуту генерируем событие
         if (match.time <= MATCH_DURATION) {
             generateEvent(roomId);
         }
         
-        // Матч закончился
         if (match.time >= MATCH_DURATION) {
             finishMatch(roomId);
         }
@@ -211,39 +232,76 @@ function startMatchTimer(roomId) {
 
 function generateEvent(roomId) {
     const match = matches[roomId];
-    if (!match) return;
+    if (!match || match.finished) return;
     
     const p1 = players[match.player1];
     const p2 = players[match.player2];
     if (!p1 || !p2) return;
     
-    const p1Rating = p1.teamRating - match.redCards1 * 10; // красная снижает шанс
+    // Базовый шанс на событие (60%)
+    if (Math.random() > 0.60) return;
+    
+    const p1Rating = p1.teamRating - match.redCards1 * 10;
     const p2Rating = p2.teamRating - match.redCards2 * 10;
     const totalRating = Math.max(1, p1Rating + p2Rating);
     
-    // Шанс на событие (60% что что-то произойдёт)
-    if (Math.random() > 0.60) return;
-    
-    // Определяем тип события
     const eventRoll = Math.random();
     
-    // Красная карточка (5%)
-    if (eventRoll < 0.05 && match.redCards1 < 2 && match.redCards2 < 2) {
-        const player = Math.random() < 0.5 ? 'player1' : 'player2';
-        const playerData = player === 'player1' ? p1 : p2;
-        const playerName = playerData.name;
-        
-        if (player === 'player1') {
-            match.redCards1++;
-            if (match.redCards1 >= 2) match.redCards1 = 2;
+    // ===== КРАСНАЯ КАРТОЧКА (ДИНАМИЧЕСКИЙ ШАНС) =====
+    const scoreDiff = Math.abs(match.score1 - match.score2);
+    const baseRedChance = 0.01 + (scoreDiff * 0.023);
+    const redChance = Math.min(0.08, baseRedChance);
+    
+    let redPlayer = null;
+    let redPlayerId = null;
+    let redPlayerName = '';
+    
+    if (match.score1 > match.score2) {
+        if (Math.random() < 0.65) {
+            redPlayer = 'player2';
+            redPlayerId = match.player2;
+            redPlayerName = p2.name;
         } else {
+            redPlayer = 'player1';
+            redPlayerId = match.player1;
+            redPlayerName = p1.name;
+        }
+    } else if (match.score2 > match.score1) {
+        if (Math.random() < 0.65) {
+            redPlayer = 'player1';
+            redPlayerId = match.player1;
+            redPlayerName = p1.name;
+        } else {
+            redPlayer = 'player2';
+            redPlayerId = match.player2;
+            redPlayerName = p2.name;
+        }
+    } else {
+        if (Math.random() < 0.02) {
+            redPlayer = Math.random() < 0.5 ? 'player1' : 'player2';
+            redPlayerId = redPlayer === 'player1' ? match.player1 : match.player2;
+            redPlayerName = redPlayer === 'player1' ? p1.name : p2.name;
+        }
+    }
+    
+    let redCount = 0;
+    let maxRed = 2;
+    if (redPlayer === 'player1') {
+        redCount = match.redCards1;
+    } else if (redPlayer === 'player2') {
+        redCount = match.redCards2;
+    }
+    
+    if (redPlayer && redCount < maxRed && Math.random() < redChance) {
+        if (redPlayer === 'player1') {
+            match.redCards1++;
+        } else if (redPlayer === 'player2') {
             match.redCards2++;
-            if (match.redCards2 >= 2) match.redCards2 = 2;
         }
         
         const event = {
             time: match.time,
-            text: `🟥 КРАСНАЯ КАРТОЧКА! ${playerName} удалён!`,
+            text: `🟥 КРАСНАЯ КАРТОЧКА! ${redPlayerName} удалён! (${match.score1}:${match.score2})`,
             type: 'red'
         };
         match.events.push(event);
@@ -251,12 +309,23 @@ function generateEvent(roomId) {
         return;
     }
     
-    // Жёлтая карточка (10%)
-    if (eventRoll < 0.15 && match.yellowCards1 < 3 && match.yellowCards2 < 3) {
-        const player = Math.random() < 0.5 ? 'player1' : 'player2';
-        const playerData = player === 'player1' ? p1 : p2;
+    // ===== ЖЁЛТАЯ КАРТОЧКА =====
+    const yellowChance = 0.05 + (scoreDiff * 0.02);
+    const finalYellowChance = Math.min(0.12, yellowChance);
+    
+    if (Math.random() < finalYellowChance && match.yellowCards1 < 3 && match.yellowCards2 < 3) {
+        let yellowPlayer;
+        if (match.score1 > match.score2 && Math.random() < 0.6) {
+            yellowPlayer = 'player2';
+        } else if (match.score2 > match.score1 && Math.random() < 0.6) {
+            yellowPlayer = 'player1';
+        } else {
+            yellowPlayer = Math.random() < 0.5 ? 'player1' : 'player2';
+        }
         
-        if (player === 'player1') {
+        const playerData = yellowPlayer === 'player1' ? p1 : p2;
+        
+        if (yellowPlayer === 'player1') {
             match.yellowCards1++;
         } else {
             match.yellowCards2++;
@@ -272,23 +341,25 @@ function generateEvent(roomId) {
         return;
     }
     
-    // Гол (шанс зависит от рейтинга)
-    const goalChance = 0.15 + (p1Rating - 50) / 500 + (p2Rating - 50) / 500;
-    const finalGoalChance = Math.min(0.40, Math.max(0.05, goalChance));
+    // ===== ГОЛ =====
+    const p1Power = Math.max(0, p1Rating - match.redCards1 * 10);
+    const p2Power = Math.max(0, p2Rating - match.redCards2 * 10);
+    
+    let p1GoalBonus = 0;
+    let p2GoalBonus = 0;
+    if (match.score1 > match.score2) {
+        p2GoalBonus = 0.05;
+    } else if (match.score2 > match.score1) {
+        p1GoalBonus = 0.05;
+    }
+    
+    const p1GoalChance = (p1Power / totalRating) + p1GoalBonus;
+    const p2GoalChance = (p2Power / totalRating) + p2GoalBonus;
+    const goalChance = 0.15 + (p1GoalChance + p2GoalChance) / 4;
+    const finalGoalChance = Math.min(0.40, Math.max(0.08, goalChance));
     
     if (Math.random() < finalGoalChance) {
-        // Кто забивает? (с учётом рейтинга и красных)
-        const p1Power = Math.max(0, p1Rating - match.redCards1 * 10);
-        const p2Power = Math.max(0, p2Rating - match.redCards2 * 10);
-        const totalPower = p1Power + p2Power;
-        
-        let isOffside = false;
-        let scorer = '';
-        let scorerName = '';
-        
-        // 20% что гол будет с оффсайда (не засчитывается)
         if (Math.random() < 0.20) {
-            isOffside = true;
             const event = {
                 time: match.time,
                 text: `🚩 Оффсайд! Гол не засчитан!`,
@@ -299,18 +370,25 @@ function generateEvent(roomId) {
             return;
         }
         
-        // Определяем кто забил
+        let scorer = '';
+        let scorerName = '';
         const roll = Math.random();
-        if (roll < p1Power / totalPower) {
+        const totalPower = p1Power + p2Power;
+        
+        if (totalPower === 0) {
+            scorer = Math.random() < 0.5 ? 'player1' : 'player2';
+        } else if (roll < p1Power / totalPower) {
             scorer = 'player1';
-            scorerName = p1.name;
-            match.score1++;
-            p1.stars += 2;
         } else {
             scorer = 'player2';
+        }
+        
+        if (scorer === 'player1') {
+            scorerName = p1.name;
+            match.score1++;
+        } else {
             scorerName = p2.name;
             match.score2++;
-            p2.stars += 2;
         }
         
         const event = {
@@ -328,12 +406,12 @@ function generateEvent(roomId) {
         return;
     }
     
-    // Обычное событие (удар, момент)
+    // ===== ОБЫЧНЫЙ МОМЕНТ =====
     if (Math.random() < 0.3) {
         const player = Math.random() < 0.5 ? p1 : p2;
         const event = {
             time: match.time,
-            text: `💥 ${player.name} создаёт опасный момент!`,
+            text: `💥 ${player.name} создаёт момент!`,
             type: 'shot'
         };
         match.events.push(event);
@@ -362,72 +440,56 @@ function finishMatch(roomId) {
     let crystals1 = 0, crystals2 = 0;
     
     if (match.score1 > match.score2) {
-        // Победа первого
         stars1 = 15 + Math.floor(Math.random() * 5);
         stars2 = Math.max(0, 5 + Math.floor(Math.random() * 3));
         crystals1 = 3 + Math.floor(Math.random() * 3);
         result = 'p1';
     } else if (match.score2 > match.score1) {
-        // Победа второго
         stars2 = 15 + Math.floor(Math.random() * 5);
         stars1 = Math.max(0, 5 + Math.floor(Math.random() * 3));
         crystals2 = 3 + Math.floor(Math.random() * 3);
         result = 'p2';
     } else {
-        // Ничья
         stars1 = 3;
         stars2 = 3;
         result = 'draw';
     }
     
-    // Применяем изменения
     p1.stars += stars1;
     p1.crystals += crystals1;
     p2.stars += stars2;
     p2.crystals += crystals2;
     
-    // Не даём уйти в минус
     p1.stars = Math.max(0, p1.stars);
     p2.stars = Math.max(0, p2.stars);
     
-    // Обновляем профили
-    io.to(match.player1).emit('updateProfile', p1);
-    io.to(match.player2).emit('updateProfile', p2);
-    
-    // Отправляем результат
-    io.to(roomId).emit('matchResult', {
-        result,
+    // Отправляем правильные результаты каждому игроку
+    io.to(match.player1).emit('matchResult', {
+        result: result === 'p1' ? 'win' : (result === 'p2' ? 'loss' : 'draw'),
         score1: match.score1,
         score2: match.score2,
-        events: match.events,
-        stars1,
-        stars2,
-        crystals1,
-        crystals2
+        starsGained: stars1,
+        crystalsGained: crystals1,
+        events: match.events
     });
+    
+    io.to(match.player2).emit('matchResult', {
+        result: result === 'p2' ? 'win' : (result === 'p1' ? 'loss' : 'draw'),
+        score1: match.score1,
+        score2: match.score2,
+        starsGained: stars2,
+        crystalsGained: crystals2,
+        events: match.events
+    });
+    
+    io.to(match.player1).emit('updateProfile', p1);
+    io.to(match.player2).emit('updateProfile', p2);
     
     io.emit('updateLeaders', getLeaders());
     
     const roomIdCopy = roomId;
     setTimeout(() => {
         delete matches[roomIdCopy];
-        // Возвращаем игроков в очередь
-        if (players[match.player1]) {
-            waitingQueue.push(match.player1);
-            const s1 = io.sockets.sockets.get(match.player1);
-            if (s1) {
-                s1.emit('waiting', 'Ищем нового соперника...');
-                matchmake(s1);
-            }
-        }
-        if (players[match.player2]) {
-            waitingQueue.push(match.player2);
-            const s2 = io.sockets.sockets.get(match.player2);
-            if (s2) {
-                s2.emit('waiting', 'Ищем нового соперника...');
-                matchmake(s2);
-            }
-        }
         io.emit('queueUpdate', waitingQueue.length);
     }, 5000);
 }

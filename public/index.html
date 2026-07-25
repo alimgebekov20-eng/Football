@@ -78,6 +78,7 @@
         .btn-primary { background: #e6b42c; color: #1f2e3a; box-shadow: 0 4px 0 #8f6e1a; }
         .btn-danger { background: #c73d3d; box-shadow: 0 4px 0 #741f1f; }
         .btn-success { background: #2e9e5a; box-shadow: 0 4px 0 #1a5f35; }
+        .btn-find { background: #4a8db7; box-shadow: 0 4px 0 #2a5a77; }
         .match-box {
             background: rgba(0,0,0,0.35);
             border-radius: 28px;
@@ -197,6 +198,7 @@
             text-align: center;
             display: none;
         }
+        .btn-block { width: 100%; }
     </style>
 </head>
 <body>
@@ -221,6 +223,9 @@
 
     <!-- СТАТИСТИКА -->
     <div id="playerStats">📊 0 матчей | 🏆 0 побед | 🤝 0 ничьих | 😞 0 поражений | ⚽ 0 голов</div>
+
+    <!-- ПОИСК СОПЕРНИКА -->
+    <button class="btn btn-find btn-block mt-8" id="findMatchBtn">🔍 Найти соперника</button>
 
     <!-- ОЖИДАНИЕ -->
     <div id="waitingArea" class="match-box hidden">
@@ -354,14 +359,12 @@
         data.crystals = parseInt(crystalsEl.textContent) || 0;
         data.teamRating = parseInt(ratingEl.textContent) || 50;
         
-        // Сохраняем статистику
         const stats = loadPlayerStats();
         data.stats = stats;
         
         savePlayerData(data);
     }
 
-    // Сохраняем при любом изменении
     function triggerSave() {
         saveCurrentProfile();
     }
@@ -406,7 +409,6 @@
             currentProfile = saved;
             updateStatsDisplay();
             
-            // Отправляем на сервер
             socket.emit('loadProfile', {
                 name: saved.name || 'Игрок',
                 stars: saved.stars || 100,
@@ -462,13 +464,13 @@
 
     socket.on('matchTime', (data) => {
         matchTime.textContent = data.time + "'";
-        triggerSave(); // Сохраняем каждую минуту
+        triggerSave();
     });
 
     socket.on('scoreUpdate', (data) => {
         score1.textContent = data.score1;
         score2.textContent = data.score2;
-        triggerSave(); // Мгновенное сохранение при голе
+        triggerSave();
         vibrate(20);
     });
 
@@ -481,7 +483,7 @@
         else if (event.type === 'offside') div.style.color = '#88ccff';
         eventsLog.appendChild(div);
         eventsLog.scrollTop = eventsLog.scrollHeight;
-        triggerSave(); // Сохраняем при любом событии
+        triggerSave();
         vibrate(30);
     });
 
@@ -490,30 +492,46 @@
         matchArea.classList.add('hidden');
         resultArea.classList.remove('hidden');
         
-        const isWinner = data.result === 'p1' ? true : (data.result === 'p2' ? false : null);
-        let title = '🤝 Ничья!';
-        if (isWinner === true) title = '🎉 ПОБЕДА!';
-        else if (isWinner === false) title = '😞 Поражение...';
+        let title = '';
+        if (data.result === 'win') {
+            title = '🎉 ПОБЕДА!';
+            // Сохраняем победу
+            const stats = loadPlayerStats();
+            stats.matches++;
+            stats.wins++;
+            stats.goals += parseInt(score1.textContent) || 0;
+            const current = loadPlayerData() || {};
+            current.stats = stats;
+            savePlayerData(current);
+            updateStatsDisplay();
+        } else if (data.result === 'loss') {
+            title = '😞 Поражение...';
+            const stats = loadPlayerStats();
+            stats.matches++;
+            stats.losses++;
+            stats.goals += parseInt(score1.textContent) || 0;
+            const current = loadPlayerData() || {};
+            current.stats = stats;
+            savePlayerData(current);
+            updateStatsDisplay();
+        } else {
+            title = '🤝 Ничья!';
+            const stats = loadPlayerStats();
+            stats.matches++;
+            stats.draws++;
+            stats.goals += parseInt(score1.textContent) || 0;
+            const current = loadPlayerData() || {};
+            current.stats = stats;
+            savePlayerData(current);
+            updateStatsDisplay();
+        }
         
         document.getElementById('resultTitle').textContent = title;
         document.getElementById('resultScore').textContent = `${data.score1} : ${data.score2}`;
         
-        // Сохраняем статистику
-        const stats = loadPlayerStats();
-        stats.matches++;
-        if (isWinner === true) stats.wins++;
-        else if (isWinner === null) stats.draws++;
-        else stats.losses++;
-        stats.goals += parseInt(score1.textContent) || 0;
-        
-        const current = loadPlayerData() || {};
-        current.stats = stats;
-        savePlayerData(current);
-        updateStatsDisplay();
-        
         let details = '';
-        if (data.stars1 > 0) details += `⭐ +${data.stars1} звёзд `;
-        if (data.crystals1 > 0) details += `💎 +${data.crystals1} кристаллов`;
+        if (data.starsGained > 0) details += `⭐ +${data.starsGained} звёзд `;
+        if (data.crystalsGained > 0) details += `💎 +${data.crystalsGained} кристаллов`;
         document.getElementById('resultDetails').textContent = details || 'Хорошая игра!';
         
         statusEl.textContent = '🏁 Матч завершён';
@@ -558,10 +576,18 @@
         playerName = document.getElementById('nameInput').value.trim() || 'Игрок';
         socket.emit('join', playerName);
         vibrate(15);
-        // Сохраняем ник
         const data = loadPlayerData() || {};
         data.name = playerName;
         savePlayerData(data);
+    };
+
+    document.getElementById('findMatchBtn').onclick = () => {
+        if (!playerName) {
+            statusEl.textContent = '⚠️ Сначала войди в игру!';
+            return;
+        }
+        socket.emit('findMatch');
+        vibrate(15);
     };
 
     document.getElementById('endMatchBtn').onclick = () => {
@@ -590,27 +616,21 @@
     // ===== ЗАПУСК =====
 
     window.onload = () => {
-        // Загружаем сохранённый ник
         const saved = loadPlayerData();
         if (saved?.name) {
             document.getElementById('nameInput').value = saved.name;
             playerName = saved.name;
         }
         
-        // Загружаем статистику
         updateStatsDisplay();
-        
-        // Загружаем профиль на сервер
         loadSavedProfile();
         
-        // Автовход
         setTimeout(() => {
             document.getElementById('joinBtn').click();
         }, 500);
         
-        // Запускаем автосохранение
         startAutoSave();
     };
 </script>
 </body>
-</html>
+    </html>
